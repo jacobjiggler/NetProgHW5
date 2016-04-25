@@ -20,11 +20,11 @@
 #define PORT2 "443";
 
 int parseheader(std::string data){
-  std::cout << data << std::endl;
+  std::cout <<"data:" << data << std::endl;
   int size_index = data.find("Content-Length: ");
   if (size_index == std::string::npos){
-    std::cout << "error: Couldn't find content-length" << std::endl;
-    return 1;
+    //its 1.1
+    return -1;
   }
   size_index+=16;
   std::string size_str = data.substr(size_index, data.find("\r",size_index) - size_index);
@@ -75,7 +75,7 @@ int main(int argc , char *argv[])
   SSL_load_error_strings();
   bool ssl = false;
 
-  std::string port;
+  std::string port = "80";
   std::string host;
   std::string path;
   if (argc !=  2){
@@ -97,9 +97,11 @@ int main(int argc , char *argv[])
   }
   if (input.substr(0,5)=="https"){
     ssl = true;
+    std::cout << "ssl enabled " << index << " " << input <<std::endl;
     host = input.substr(8,index - 8);
-    if (index == std::string::npos)
+    if (index == std::string::npos || index == index2){
       port = PORT2;
+    }
   }
   else {
     host = input.substr(7,index - 7);
@@ -148,8 +150,10 @@ else {
 }
   std::string request = "GET " + path + " HTTP/1.1\r\n";
   std::string header = "Host: " + host + ":" + port + "\r\n";
-  std::string header2 = "User-Agent: martij24-netprog-hw5/1.0\r\n\r\n";
+  std::string header2 = "Connection: close \r\n";
+  std::string header3 = "User-Agent: martij24-netprog-hw5/1.0\r\n\r\n";
   std::cout << request + header + header2 << std::endl;
+  std::string combined = request + header + header2;
   if (connec.write(request.c_str(), request.size(), 0) < 0)
     perror("send()");
 
@@ -158,19 +162,31 @@ else {
 
   if (connec.write(header2.c_str(), header2.size(), 0) < 0)
     perror("send()");
-  char head[1000];
-  bzero(head,1000);
+  if (connec.write(header3.c_str(), header3.size(), 0) < 0)
+    perror("send()");
+  char head[1024];
+  bzero(head,1024);
 
   connec.read(&head, sizeof(head)-1, 0);
   fputs(head, stderr);
   std::string data = std::string(head);
 
   int size = parseheader(data);
-
+  bool repeat = false;
+  if (size == -1){
+    repeat = true;
+    size = 1024;
+  }
   char content[size];
   bzero(content,size);
   int read = connec.read(&content, size-1, MSG_WAITALL);
   std::cout.write(content,size) << std::endl;
+  while (read != 0 && repeat == true){
+    bzero(content,size);
+    read = connec.read(&content, size-1, MSG_WAITALL);
+    std::cout.write(content,size) << std::endl;
+
+  }
   connec.closeconnec();
   if (ssl)
     SSL_CTX_free(ctx);
